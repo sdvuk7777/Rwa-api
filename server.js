@@ -29,7 +29,7 @@ function getNextAuthToken() {
     return authTokens[currentTokenIndex];
 }
 
-// ✅ Improved AES-128-CBC Decryption Function
+// AES-128-CBC Decryption Function
 function decrypt(encryptedBase64) {
     try {
         if (!encryptedBase64 || typeof encryptedBase64 !== 'string') return '';
@@ -158,7 +158,48 @@ function cleanupTokens() {
 // Schedule daily cleanup
 setInterval(cleanupTokens, 24 * 60 * 60 * 1000); // Run every 24 hours
 
-// Video Details Endpoint with both systems
+// New endpoint to view tokens data
+app.get('/view-tokens', (req, res) => {
+    try {
+        if (!fs.existsSync(TOKENS_FILE)) {
+            return res.status(404).json({
+                status: 404,
+                error: "Tokens file not found"
+            });
+        }
+
+        const tokensData = JSON.parse(fs.readFileSync(TOKENS_FILE));
+        
+        // Calculate statistics
+        const totalTokens = Object.keys(tokensData).length;
+        let totalRequests = 0;
+        const today = new Date().toISOString().split('T')[0];
+        
+        Object.values(tokensData).forEach(token => {
+            totalRequests += token.count;
+        });
+
+        res.json({
+            status: 200,
+            data: {
+                tokens: tokensData,
+                statistics: {
+                    total_tokens: totalTokens,
+                    total_requests: totalRequests,
+                    date: today
+                }
+            }
+        });
+    } catch (err) {
+        console.error("❌ Error viewing tokens:", err.message);
+        res.status(500).json({
+            status: 500,
+            error: "Failed to read tokens data"
+        });
+    }
+});
+
+// Video Details Endpoint
 app.get('/video-details', handleRequestToken, async (req, res) => {
     const { userid, course_id, video_id } = req.query;
 
