@@ -83,7 +83,7 @@ function validateToken(token) {
 // Request Token Management System
 async function handleRequestToken(req, res, next) {
     const { token } = req.query;
-    
+
     if (!token) {
         return res.status(400).json({ 
             status: 400,
@@ -145,7 +145,7 @@ async function handleRequestToken(req, res, next) {
 function cleanupTokens() {
     const currentDate = new Date().toISOString().split('T')[0];
     const tokensData = JSON.parse(fs.readFileSync(TOKENS_FILE));
-    
+
     for (const token in tokensData) {
         if (tokensData[token].dateAdded !== currentDate) {
             delete tokensData[token];
@@ -169,12 +169,12 @@ app.get('/view-tokens', (req, res) => {
         }
 
         const tokensData = JSON.parse(fs.readFileSync(TOKENS_FILE));
-        
+
         // Calculate statistics
         const totalTokens = Object.keys(tokensData).length;
         let totalRequests = 0;
         const today = new Date().toISOString().split('T')[0];
-        
+
         Object.values(tokensData).forEach(token => {
             totalRequests += token.count;
         });
@@ -275,6 +275,79 @@ app.get('/video-details', handleRequestToken, async (req, res) => {
 
     } catch (err) {
         console.error("❌ Error in API:", err.message);
+        res.status(500).json({ 
+            status: 500,
+            data: [],
+            error: `Error occurred: ${err.message}` 
+        });
+    }
+});
+
+// Live Stream Details Endpoint
+app.get('/live', handleRequestToken, async (req, res) => {
+    const { userid, course_id, video_id } = req.query;
+
+    if (!userid || !course_id || !video_id) {
+        return res.status(400).json({ 
+            status: 400,
+            data: [],
+            error: "Missing required query parameters." 
+        });
+    }
+
+    const headers = {
+        "Client-Service": "Appx",
+        "source": "website",
+        "Auth-Key": "appxapi",
+        "Authorization": getNextAuthToken(), // Rotating tokens
+        "User-ID": userid
+    };
+
+    const API_BASE = "https://rozgarapinew.teachx.in";
+    const url = `${API_BASE}/get/fetchVideoDetailsById?course_id=${course_id}&video_id=${video_id}&ytflag=0&folder_wise_course=0&lc_app_api_url=`;
+
+    try {
+        const response = await axios.get(url, { headers });
+        const data = response.data.data;
+
+        if (!data) {
+            return res.status(404).json({ 
+                status: 404,
+                data: [],
+                error: "No data found for this live stream" 
+            });
+        }
+
+        const liveDetails = {
+            title: data.Title || "",
+            thumbnail: data.thumbnail || "",
+            date_and_time: data.date_and_time || "",
+            qualities: {},
+            low_latency_enabled: data.low_latency_enabled || false
+        };
+
+        // Decrypt live stream quality links
+        if (Array.isArray(data.livestream_links)) {
+            data.livestream_links.forEach(link => {
+                if (link.path && link.quality) {
+                    const quality = link.quality.replace(' Quality', '').toLowerCase(); // Convert to "low", "medium", "high"
+                    liveDetails.qualities[quality] = decrypt(link.path);
+                }
+            });
+        }
+
+        // If file_link exists (single stream URL)
+        if (data.file_link) {
+            liveDetails.primary_stream_url = decrypt(data.file_link);
+        }
+
+        res.json({
+            status: 200,
+            data: [liveDetails]
+        });
+
+    } catch (err) {
+        console.error("❌ Error in Live API:", err.message);
         res.status(500).json({ 
             status: 500,
             data: [],
