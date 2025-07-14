@@ -201,9 +201,9 @@ app.get('/view-tokens', (req, res) => {
 
 // Video Details Endpoint
 app.get('/video-details', handleRequestToken, async (req, res) => {
-    const { userid, course_id, video_id } = req.query;
+    const { userid, course_id, video_id, token } = req.query;
 
-    if (!userid || !course_id || !video_id) {
+    if (!userid || !course_id || !video_id || !token) {
         return res.status(400).json({ 
             status: 400,
             data: [],
@@ -215,7 +215,7 @@ app.get('/video-details', handleRequestToken, async (req, res) => {
         "Client-Service": "Appx",
         "source": "website",
         "Auth-Key": "appxapi",
-        "Authorization": getNextAuthToken(), // Rotating tokens
+        "Authorization": getNextAuthToken(),
         "User-ID": userid
     };
 
@@ -283,15 +283,15 @@ app.get('/video-details', handleRequestToken, async (req, res) => {
     }
 });
 
-// Live Stream Details Endpoint
+// Live Stream Details Endpoint - Updated with new API
 app.get('/live', handleRequestToken, async (req, res) => {
-    const { userid, course_id, video_id } = req.query;
+    const { userid, course_id, token } = req.query;
 
-    if (!userid || !course_id || !video_id) {
+    if (!userid || !course_id || !token) {
         return res.status(400).json({ 
             status: 400,
             data: [],
-            error: "Missing required query parameters." 
+            error: "Missing required query parameters (userid, course_id, and token)." 
         });
     }
 
@@ -299,51 +299,89 @@ app.get('/live', handleRequestToken, async (req, res) => {
         "Client-Service": "Appx",
         "source": "website",
         "Auth-Key": "appxapi",
-        "Authorization": getNextAuthToken(), // Rotating tokens
+        "Authorization": getNextAuthToken(),
         "User-ID": userid
     };
 
     const API_BASE = "https://rozgarapinew.teachx.in";
-    const url = `${API_BASE}/get/fetchVideoDetailsById?course_id=${course_id}&video_id=${video_id}&ytflag=0&folder_wise_course=0&lc_app_api_url=`;
+    const url = `${API_BASE}/get/live_upcoming_course_classv2?courseid=${course_id}&start=-1`;
 
     try {
         const response = await axios.get(url, { headers });
-        const data = response.data.data;
+        const responseData = response.data.data;
 
-        if (!data) {
+        if (!responseData) {
             return res.status(404).json({ 
                 status: 404,
                 data: [],
-                error: "No data found for this live stream" 
+                error: "No live or upcoming classes found" 
             });
         }
 
-        const liveDetails = {
-            title: data.Title || "",
-            thumbnail: data.thumbnail || "",
-            date_and_time: data.date_and_time || "",
-            qualities: {},
-            low_latency_enabled: data.low_latency_enabled || false
+        const processClass = (classData, status) => {
+            return {
+                status: status,
+                id: classData.id || "",
+                title: classData.Title || "",
+                thumbnail: classData.thumbnail || "",
+                date_and_time: classData.date_and_time || "",
+                qualities: {},
+                low_latency_enabled: classData.low_latency_enabled || false,
+                live_status: classData.live_status || "0"
+            };
         };
 
-        // Decrypt live stream quality links
-        if (Array.isArray(data.livestream_links)) {
-            data.livestream_links.forEach(link => {
-                if (link.path && link.quality) {
-                    const quality = link.quality.replace(' Quality', '').toLowerCase(); // Convert to "low", "medium", "high"
-                    liveDetails.qualities[quality] = decrypt(link.path);
+        const result = [];
+
+        // Process upcoming classes
+        if (Array.isArray(responseData.upcoming)) {
+            responseData.upcoming.forEach(classData => {
+                const classInfo = processClass(classData, "upcoming");
+                
+                // Decrypt file_link if available
+                if (classData.file_link) {
+                    classInfo.primary_stream_url = decrypt(classData.file_link);
                 }
+
+                result.push(classInfo);
             });
         }
 
-        // If file_link exists (single stream URL)
-        if (data.file_link) {
-            liveDetails.primary_stream_url = decrypt(data.file_link);
+        // Process live classes
+        if (Array.isArray(responseData.live)) {
+            responseData.live.forEach(classData => {
+                const classInfo = processClass(classData, "live");
+                
+                // Decrypt all quality streams
+                if (Array.isArray(classData.livestream_links)) {
+                    classData.livestream_links.forEach(link => {
+                        if (link.path && link.quality) {
+                            const quality = link.quality.replace(' Quality', '').toLowerCase();
+                            classInfo.qualities[quality] = decrypt(link.path);
+                        }
+                    });
+                }
+
+                // Decrypt primary stream URL
+                if (classData.file_link) {
+                    classInfo.primary_stream_url = decrypt(classData.file_link);
+                }
+
+                result.push(classInfo);
+            });
+        }
+
+        if (result.length === 0) {
+            return res.status(404).json({ 
+                status: 404,
+                data: [],
+                error: "No classes found" 
+            });
         }
 
         res.json({
             status: 200,
-            data: [liveDetails]
+            data: result
         });
 
     } catch (err) {
