@@ -283,7 +283,7 @@ app.get('/video-details', handleRequestToken, async (req, res) => {
     }
 });
 
-// Live Stream Details Endpoint - Updated with new API
+// Live Classes Endpoint - Only returns live classes with status key
 app.get('/live', handleRequestToken, async (req, res) => {
     const { userid, course_id, token } = req.query;
 
@@ -310,78 +310,50 @@ app.get('/live', handleRequestToken, async (req, res) => {
         const response = await axios.get(url, { headers });
         const responseData = response.data.data;
 
-        if (!responseData) {
+        if (!responseData || !responseData.live || responseData.live.length === 0) {
             return res.status(404).json({ 
                 status: 404,
                 data: [],
-                error: "No live or upcoming classes found" 
+                error: "No live classes currently available" 
             });
         }
 
-        const processClass = (classData, status) => {
-            return {
-                status: status,
+        const liveClasses = [];
+
+        // Process only live classes
+        responseData.live.forEach(classData => {
+            const classInfo = {
+                status: "live",  // Status key added here
                 id: classData.id || "",
                 title: classData.Title || "",
                 thumbnail: classData.thumbnail || "",
                 date_and_time: classData.date_and_time || "",
                 qualities: {},
                 low_latency_enabled: classData.low_latency_enabled || false,
-                live_status: classData.live_status || "0"
+                live_status: classData.live_status || "1"
             };
-        };
+            
+            // Decrypt all quality streams
+            if (Array.isArray(classData.livestream_links)) {
+                classData.livestream_links.forEach(link => {
+                    if (link.path && link.quality) {
+                        const quality = link.quality.replace(' Quality', '').toLowerCase();
+                        classInfo.qualities[quality] = decrypt(link.path);
+                    }
+                });
+            }
 
-        const result = [];
+            // Decrypt primary stream URL
+            if (classData.file_link) {
+                classInfo.primary_stream_url = decrypt(classData.file_link);
+            }
 
-        // Process upcoming classes
-        if (Array.isArray(responseData.upcoming)) {
-            responseData.upcoming.forEach(classData => {
-                const classInfo = processClass(classData, "upcoming");
-                
-                // Decrypt file_link if available
-                if (classData.file_link) {
-                    classInfo.primary_stream_url = decrypt(classData.file_link);
-                }
-
-                result.push(classInfo);
-            });
-        }
-
-        // Process live classes
-        if (Array.isArray(responseData.live)) {
-            responseData.live.forEach(classData => {
-                const classInfo = processClass(classData, "live");
-                
-                // Decrypt all quality streams
-                if (Array.isArray(classData.livestream_links)) {
-                    classData.livestream_links.forEach(link => {
-                        if (link.path && link.quality) {
-                            const quality = link.quality.replace(' Quality', '').toLowerCase();
-                            classInfo.qualities[quality] = decrypt(link.path);
-                        }
-                    });
-                }
-
-                // Decrypt primary stream URL
-                if (classData.file_link) {
-                    classInfo.primary_stream_url = decrypt(classData.file_link);
-                }
-
-                result.push(classInfo);
-            });
-        }
-
-        if (result.length === 0) {
-            return res.status(404).json({ 
-                status: 404,
-                data: [],
-                error: "No classes found" 
-            });
-        }
+            liveClasses.push(classInfo);
+        });
 
         res.json({
             status: 200,
-            data: result
+            data: liveClasses
         });
 
     } catch (err) {
