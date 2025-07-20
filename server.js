@@ -5,9 +5,6 @@ const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const app = express();
-const ffmpeg = require('fluent-ffmpeg');
-const { path: ffmpegPath } = require('@ffmpeg-installer/ffmpeg');
-ffmpeg.setFfmpegPath(ffmpegPath);
 
 const PORT = process.env.PORT || 3000;
 const TOKENS_FILE = path.join(__dirname, 'tokens.json');
@@ -364,56 +361,6 @@ app.get('/live', handleRequestToken, async (req, res) => {
         res.status(500).json({ 
             status: 500,
             data: [],
-            error: `Error occurred: ${err.message}` 
-        });
-    }
-});
-// m3u8 to mp4
-app.get('/download', handleRequestToken, async (req, res) => {
-    const { url, token } = req.query;
-
-    if (!url || !token) {
-        return res.status(400).json({ 
-            status: 400,
-            error: "Missing required parameters (url and token)" 
-        });
-    }
-
-    // Validate token structure
-    if (!validateToken(token)) {
-        return res.status(400).json({ 
-            status: 400,
-            error: "Invalid token format" 
-        });
-    }
-
-    try {
-        res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
-        res.setHeader('Content-Type', 'video/mp4');
-
-        ffmpeg(url)
-            .inputOptions('-protocol_whitelist', 'file,http,https,tcp,tls')
-            .videoCodec('copy')
-            .audioCodec('copy')
-            .format('mp4')
-            .on('start', () => {
-                console.log('ffmpeg started processing download for:', url);
-            })
-            .on('error', (err) => {
-                console.error('Download Error:', err.message);
-                if (!res.headersSent) {
-                    res.status(500).json({ 
-                        status: 500,
-                        error: 'Error processing video: ' + err.message 
-                    });
-                }
-            })
-            .pipe(res, { end: true });
-
-    } catch (err) {
-        console.error("❌ Download Error:", err.message);
-        res.status(500).json({ 
-            status: 500,
             error: `Error occurred: ${err.message}` 
         });
     }
