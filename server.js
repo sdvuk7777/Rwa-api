@@ -9,7 +9,7 @@ app.get('/proxy', async (req, res) => {
         return res.status(400).send('Missing "url" query parameter');
     }
 
-    console.log('Proxying:', targetUrl);
+    console.log('Proxy:', targetUrl);
 
     try {
         const response = await axios.get(targetUrl, {
@@ -22,14 +22,16 @@ app.get('/proxy', async (req, res) => {
             maxRedirects: 5
         });
 
-        res.set(response.headers);
+        for (const [key, value] of Object.entries(response.headers)) {
+            res.setHeader(key, value);
+        }
         response.data.pipe(res);
     } catch (error) {
-        console.error(error.message);
-        res.status(500).send('Proxy fetch failed: ' + error.message);
+        console.error('Error:', error.message);
+        res.status(500).send('Proxy Error: ' + error.message);
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`RWA HLS Proxy running on port ${PORT}`);
+    console.log(`Proxy running at http://localhost:${PORT}/proxy?url=...`);
 });
