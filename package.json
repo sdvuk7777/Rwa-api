@@ -9,12 +9,10 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "axios": "^1.10.0",
     "crypto": "^1.0.1",
     "express": "^5.1.0",
     "fluent-ffmpeg": "^2.1.2",
-    "jsonwebtoken": "^9.0.2",
-    "request": "^2.88.2"
+    "jsonwebtoken": "^9.0.2"
   }
 }
