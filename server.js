@@ -1,9 +1,9 @@
 const express = require('express');
-const request = require('request');
+const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/proxy', (req, res) => {
+app.get('/proxy', async (req, res) => {
     const targetUrl = req.query.url;
     if (!targetUrl) {
         return res.status(400).send('Missing "url" query parameter');
@@ -11,18 +11,23 @@ app.get('/proxy', (req, res) => {
 
     console.log('Proxying:', targetUrl);
 
-    req.pipe(request({
-        url: targetUrl,
-        headers: {
-            'Referer': 'https://appx-play.akamai.net.in/',
-            'Origin': 'https://appx-play.akamai.net.in/',
-            'User-Agent': req.headers['user-agent'] || ''
-        },
-        followAllRedirects: true
-    })).on('error', (err) => {
-        console.error(err);
-        res.status(500).send('Error fetching target URL');
-    }).pipe(res);
+    try {
+        const response = await axios.get(targetUrl, {
+            responseType: 'stream',
+            headers: {
+                'Referer': 'https://appx-play.akamai.net.in/',
+                'Origin': 'https://appx-play.akamai.net.in/',
+                'User-Agent': req.headers['user-agent'] || ''
+            },
+            maxRedirects: 5
+        });
+
+        res.set(response.headers);
+        response.data.pipe(res);
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).send('Proxy fetch failed: ' + error.message);
+    }
 });
 
 app.listen(PORT, () => {
