@@ -5,6 +5,20 @@ const PORT = 3000;
 
 const REFERER = 'https://appx-play.akamai.net.in/';
 
+// Add CORS middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
 app.get('/stream', async (req, res) => {
   const videoUrl = req.query.url;
   if (!videoUrl) return res.status(400).send('Missing URL');
@@ -65,4 +79,3 @@ app.get('/segment', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`HLS proxy server running on http://localhost:${PORT}`);
 });
-
