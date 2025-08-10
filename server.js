@@ -1,81 +1,29 @@
-const express = require('express');
-const axios = require('axios');
-const app = express();
-const PORT = 3000;
+const puppeteer = require("puppeteer");
 
-const REFERER = 'https://appx-play.akamai.net.in/';
+async function extractOtpUrl(pageUrl) {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
 
-// Add CORS middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  
-  next();
-});
+    let otpUrl = null;
 
-app.get('/stream', async (req, res) => {
-  const videoUrl = req.query.url;
-  if (!videoUrl) return res.status(400).send('Missing URL');
-
-  try {
-    const response = await axios.get(videoUrl, {
-      headers: {
-        'Referer': REFERER,
-        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0'
-      }
+    page.on("request", (request) => {
+        const reqUrl = request.url();
+        if (reqUrl.includes("pw-api1-ab3091004643.herokuapp.com/api/otp")) {
+            otpUrl = reqUrl;
+            console.log("Found OTP URL:", otpUrl);
+        }
     });
 
-    let content = response.data;
+    await page.goto(pageUrl, { waitUntil: "networkidle2" });
 
-    const baseUrl = videoUrl.substring(0, videoUrl.lastIndexOf('/') + 1);
+    await browser.close();
+    return otpUrl;
+}
 
-    content = content.replace(/^(?!#)([^\s]+\.ts[^\s]*)/gm, segment => {
-      const fullSegmentUrl = baseUrl + segment;
-      return `/segment?url=${encodeURIComponent(fullSegmentUrl)}`;
-    });
-
-    content = content.replace(/^(?!#)([^\s]+\.m3u8[^\s]*)/gm, playlist => {
-      const fullPlaylistUrl = baseUrl + playlist;
-      return `/stream?url=${encodeURIComponent(fullPlaylistUrl)}`;
-    });
-
-    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-    res.send(content);
-
-  } catch (error) {
-    console.error('Error loading playlist:', error.message);
-    res.status(500).send('Failed to load playlist.');
-  }
-});
-
-app.get('/segment', async (req, res) => {
-  const segmentUrl = req.query.url;
-  if (!segmentUrl) return res.status(400).send('Missing segment URL');
-
-  try {
-    const response = await axios.get(segmentUrl, {
-      responseType: 'stream',
-      headers: {
-        'Referer': REFERER,
-        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0'
-      }
-    });
-
-    res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp2t');
-    response.data.pipe(res);
-
-  } catch (error) {
-    console.error('Error loading segment:', error.message);
-    res.status(500).send('Failed to load segment.');
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`HLS proxy server running on http://localhost:${PORT}`);
-});
+(async () => {
+    const targetUrl = "https://pwthor.site/pwplayer.html?encrypted=6%2FDnCaTLsTIMV9evnvxI8hlADv%2B3qcvIBfzPSRkboRpVwel4sjVW4jfXhwSyRxFghZa1I3JYmhVewRCxWHksVbudHXF2hHtlnBID7m6RPSu186fGbA2IHpDW%2Be7oJg3iTR%2FYZj%2Fx2R%2FpUdsKRylwFmNVsz8oBV%2F8EGOk3qaxjQnzwe54UvTc32bWj93vbpFAdhjnZe51xwoqklN%2BBpMbdigGYsIQt5JjKH26fmR6xY05KjCnaJxaoPoxy%2BcSu7wPiINZAyWSEs7EnZEE6Vw6RgnutFqpbMiIP4o%2B3Kex6QuL5u6W2p6kCHC48KX5zZ%2BpHr%2BGXeKdsmNio0EKnMK%2Bswkn173mqAlKORzwtlSVFuuynlSJxBKzx5iffEeEDAZoauxjvNRhDlKwJF5QUyKITlSffa%2Fuc1xFH1aozhQGLD2cVKRRuqFECyjNuKj3hgC9&iv=FtvrBj3Xmd%2FRajiFFe1ncQ%3D%3D";
+    const otp = await extractOtpUrl(targetUrl);
+    if (!otp) {
+        console.log("OTP URL not found.");
+    }
+})();
