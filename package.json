@@ -1,15 +1,13 @@
 {
   "name": "otp-url-extractor",
   "version": "1.0.0",
-  "description": "Extract OTP API URL from pwthor.site using Puppeteer",
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "puppeteer": "^24.2.0"
+    "puppeteer-core": "^24.2.0"
   }
 }
