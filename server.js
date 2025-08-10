@@ -1,29 +1,43 @@
-const puppeteer = require("puppeteer");
+import express from "express";
+import puppeteer from "puppeteer-core";
 
-async function extractOtpUrl(pageUrl) {
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-    let otpUrl = null;
-
-    page.on("request", (request) => {
-        const reqUrl = request.url();
-        if (reqUrl.includes("pw-api1-ab3091004643.herokuapp.com/api/otp")) {
-            otpUrl = reqUrl;
-            console.log("Found OTP URL:", otpUrl);
-        }
-    });
-
-    await page.goto(pageUrl, { waitUntil: "networkidle2" });
-
-    await browser.close();
-    return otpUrl;
-}
-
-(async () => {
-    const targetUrl = "https://pwthor.site/pwplayer.html?encrypted=6%2FDnCaTLsTIMV9evnvxI8hlADv%2B3qcvIBfzPSRkboRpVwel4sjVW4jfXhwSyRxFghZa1I3JYmhVewRCxWHksVbudHXF2hHtlnBID7m6RPSu186fGbA2IHpDW%2Be7oJg3iTR%2FYZj%2Fx2R%2FpUdsKRylwFmNVsz8oBV%2F8EGOk3qaxjQnzwe54UvTc32bWj93vbpFAdhjnZe51xwoqklN%2BBpMbdigGYsIQt5JjKH26fmR6xY05KjCnaJxaoPoxy%2BcSu7wPiINZAyWSEs7EnZEE6Vw6RgnutFqpbMiIP4o%2B3Kex6QuL5u6W2p6kCHC48KX5zZ%2BpHr%2BGXeKdsmNio0EKnMK%2Bswkn173mqAlKORzwtlSVFuuynlSJxBKzx5iffEeEDAZoauxjvNRhDlKwJF5QUyKITlSffa%2Fuc1xFH1aozhQGLD2cVKRRuqFECyjNuKj3hgC9&iv=FtvrBj3Xmd%2FRajiFFe1ncQ%3D%3D";
-    const otp = await extractOtpUrl(targetUrl);
-    if (!otp) {
-        console.log("OTP URL not found.");
+app.get("/get-otp", async (req, res) => {
+    const pageUrl = req.query.url;
+    if (!pageUrl) {
+        return res.status(400).json({ error: "Missing url parameter" });
     }
-})();
+
+    try {
+        const browser = await puppeteer.launch({
+            executablePath: "/usr/bin/chromium-browser", // apne server ka chromium path
+            headless: true
+        });
+
+        const page = await browser.newPage();
+        let otpUrl = null;
+
+        page.on("request", (request) => {
+            if (request.url().includes("pw-api1-ab3091004643.herokuapp.com/api/otp")) {
+                otpUrl = request.url();
+            }
+        });
+
+        await page.goto(pageUrl, { waitUntil: "networkidle2" });
+        await browser.close();
+
+        if (otpUrl) {
+            res.json({ otpUrl });
+        } else {
+            res.status(404).json({ error: "OTP URL not found" });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
